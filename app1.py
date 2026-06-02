@@ -41,7 +41,8 @@ def extract_features(file_path):
         delta2 = librosa.feature.delta(mfccs, order=2)
         feat = np.vstack([mfccs, delta, delta2])
         return np.concatenate([np.mean(feat, axis=1), np.std(feat, axis=1)])
-    except:
+    except Exception as e:
+        st.error(f"音频异常详情：{str(e)}") # 页面弹出真实报错
         return None
 
 # 上传音频

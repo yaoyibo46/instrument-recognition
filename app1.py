@@ -4,24 +4,27 @@ import librosa
 import joblib
 import os
 
-st.set_page_config(page_title="传统乐器识别系统", layout="centered")
-st.title("🎵 传统乐器智能识别系统")
+# 页面全局配置
+st.set_page_config(page_title="传统乐器智能识别系统", layout="centered")
+
+# 顶部标题美化
+st.markdown("""
+# 🎵 <span style='color:#364599'>传统乐器智能识别系统</span>
+""", unsafe_allow_html=True)
 st.divider()
 
-# 模型路径（必须和 GitHub 一致）
-MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# 加载模型（只加载一次）
+# 缓存加载模型
 @st.cache_resource
 def load_model():
-    clf    = joblib.load(os.path.join(MODEL_DIR, "svm_model.pkl"))
-    scaler = joblib.load(os.path.join(MODEL_DIR, "svm_scaler.pkl"))
-    le     = joblib.load(os.path.join(MODEL_DIR, "svm_label_encoder.pkl"))
+    root = os.path.dirname(os.path.abspath(__file__))
+    clf = joblib.load(os.path.join(root, "svm_model.pkl"))
+    scaler = joblib.load(os.path.join(root, "svm_scaler.pkl"))
+    le = joblib.load(os.path.join(root, "svm_label_encoder.pkl"))
     return clf, scaler, le
 
 clf, scaler, le = load_model()
 
-# 特征提取（和你原来代码完全一样）
+# 特征参数
 SR = 22050
 N_MFCC = 13
 N_MELS = 40
@@ -29,41 +32,39 @@ N_FFT = 512
 HOP_LENGTH = 256
 PRE_COEF = 0.97
 
-def extract_features(file_path):
+def extract_features(file):
     try:
-        y, _ = librosa.load(file_path, sr=SR)
+        y, _ = librosa.load(file, sr=SR)
         y = librosa.effects.preemphasis(y, coef=PRE_COEF)
-        mfccs = librosa.feature.mfcc(
-            y=y, sr=SR, n_mfcc=N_MFCC, n_mels=N_MELS,
-            n_fft=N_FFT, hop_length=HOP_LENGTH, window="hamming"
-        )
+        mfccs = librosa.feature.mfcc(y=y, sr=SR,n_mfcc=N_MFCC,n_mels=N_MELS,n_fft=N_FFT,hop_length=HOP_LENGTH,window="hamming")
         delta = librosa.feature.delta(mfccs)
         delta2 = librosa.feature.delta(mfccs, order=2)
-        feat = np.vstack([mfccs, delta, delta2])
-        return np.concatenate([np.mean(feat, axis=1), np.std(feat, axis=1)])
+        feat_stack = np.vstack([mfccs, delta, delta2])
+        return np.concatenate([np.mean(feat_stack,axis=1), np.std(feat_stack,axis=1)])
     except Exception as e:
-        st.error(f"音频异常详情：{str(e)}") # 页面弹出真实报错
+        st.error(f"音频解析失败：{str(e)}")
         return None
 
-# 上传音频
-audio_file = st.file_uploader("上传音频文件", type=["wav", "mp3", "flac", "ogg"])
+# 上传区域美化
+st.subheader("📁 上传音频文件")
+audio_file = st.file_uploader("支持格式：WAV / MP3 / FLAC / OGG，单文件上限200MB", type=["wav","mp3","flac","ogg"])
 
-if audio_file is not None:
+if audio_file:
     st.audio(audio_file)
-    with st.spinner("正在提取特征并识别..."):
+    with st.spinner("🔍 正在提取声学特征、AI识别中，请稍候..."):
         feat = extract_features(audio_file)
-        if feat is None:
-            st.error("音频处理失败")
-        else:
-            x = scaler.transform(feat.reshape(1, -1))
+        if feat is not None:
+            x = scaler.transform(feat.reshape(1,-1))
             prob = clf.predict_proba(x)[0]
-            idx = np.argmax(prob)
-            label = le.classes_[idx]
-            conf = prob[idx]
+            pred_idx = np.argmax(prob)
+            pred_name = le.classes_[pred_idx]
+            conf = prob[pred_idx]
 
-            st.success(f"✅ 识别结果：**{label}**")
-            st.info(f"置信度：{conf:.2%}")
+            # 识别结果卡片美化
+            st.markdown("## ✅ 识别结论")
+            st.success(f"乐器类别：**{pred_name}** ｜ 置信度：{conf:.2%}")
 
-            st.subheader("各类别概率")
-            data = {le.classes_[i]: prob[i] for i in range(len(le.classes_))}
-            st.bar_chart(data)
+            # 各类别概率可视化
+            st.markdown("### 📊 全类别预测概率分布")
+            prob_dict = {le.classes_[i]:prob[i] for i in range(len(prob))}
+            st.bar_chart(prob_dict, color="#4279d8")

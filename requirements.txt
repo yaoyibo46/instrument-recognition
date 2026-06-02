@@ -1,10 +1,9 @@
-streamlit==1.36.0
-librosa==0.10.1
-numpy==1.24.4
-scikit-learn==1.3.2
+streamlit
+librosa
+numpy
+scikit-learn
 joblib
-numba==0.57.0
+numba
 soundfile
 pooch
-decorator
 setuptools
